@@ -1,81 +1,4 @@
-// "Player" example sketch for Lilypad MP3 Player
-// Mike Grusin, SparkFun Electronics
-// http://www.sparkfun.com
 
-// This sketch turns the Lilypad MP3 Player into a basic MP3
-// player that you can control with the optional rotary encoder.
-
-// HARDWARE
-
-// To use this sketch, an optional RGB rotary encoder must be soldered
-// to the MP3 Player board. The board is designed to hold SparkFun
-// part number COM-10892. https://www.sparkfun.com/products/10982
-
-// SOFTWARE
-
-// This sketch requires the following libraries. These are included
-// in the Lilypad MP3 Player firmware zip file and must be copied to
-// a "libraries" folder in your Arduino sketch directory:
-
-// Uses the SdFat library by William Greiman, which is supplied
-// with this archive, or download from http://code.google.com/p/sdfatlib/
-
-// Uses the SFEMP3Shield library by Porter and Flaga, which is supplied
-// with this archive, or download from http://www.billporter.info/
-
-// Uses the PinChangeInt library by Lex Talionis, which is supplied
-// with this archive, or download from http://code.google.com/p/arduino-pinchangeint/
-
-// BASIC OPERATION:
-
-// Place your audio files in the root directory of the SD card.
-// Your files MUST have one of the following extensions: MP3, WAV,
-// MID (MIDI), MP4, WMA, AAC, FLA, OGG. Note that this is solely to
-// prevent the VS1053 from locking up from being fed non-audio data
-// (files without one of the above extensions are quietly skipped).
-// You can rename any playable file to any of the above extensions,
-// or add additional extensions to the isPlayable() function below.
-// See the VS1053 datasheet for the audio file types it can play.
-
-// The player has two modes, TRACK and VOLUME. In TRACK mode, turning
-// the knob will move to the next or previous track. In VOLUME mode,
-// turning the knob will increase or decrease the volume.
-
-// You can tell what mode you're in by the color of the RGB LED in the
-// knob of the rotary encoder. TRACK mode is red, VOLUME mode is green.
-
-// To switch between modes, hold down the button on the rotary encoder
-// until the color changes (more than one second).
-
-// To start and stop playback, press the button on the rotary encoder
-// *quickly* (less than one second). When the player is playing, it
-// will stubbornly keep playing; starting new tracks when the previous
-// one ends, and switching to new tracks if you turn the knob in TRACK
-// mode. When the player is stopped, it will not start playing until
-// you press the button *quickly*, but it will silently change tracks
-// or adjust the volume if you turn the knob.
-
-// SERIAL DEBUGGING
-
-// This sketch can output serial debugging information if desired
-// by changing the global variable "debugging" to true. Note that
-// this will take away trigger inputs 4 and 5, which are shared
-// with the TX and RX lines. You can keep these lines connected to
-// trigger switches and use the serial port as long as the triggers
-// are normally open (not grounded) and remain ungrounded while the
-// serial port is in use.
-
-// License:
-// We use the "beerware" license for our firmware. You can do
-// ANYTHING you want with this code. If you like it, and we meet
-// someday, you can, but are under no obligation to, buy me a
-// (root) beer in return.
-
-// Have fun!
-// -your friends at SparkFun
-
-// Revision history:
-// 1.0 initial release MDG 2013/1/31
 
 // Required libraries:
 
@@ -89,7 +12,7 @@
 
 // Set debugging to true to get serial messages:
 
-boolean debugging = true;
+boolean debugging = true;   // TODO: remove this, after DEBUG outputs have been refactored
 
 #define DEBUG    // remove or comment to disable debugging
 
@@ -104,48 +27,6 @@ boolean debugging = true;
 #endif
 
 
-
-
-
-// Possible modes (first and last are there to make
-// rotating through them easier):
-
-#define FIRST_MODE 0
-#define TRACK 0
-#define VOLUME 1
-#define LAST_MODE 1
-
-// Initial mode for the rotary encoder. TRACK lets you
-// select audio tracks, VOLUME lets you change the volume.
-// In any mode, a quick press will start and stop playback.
-// A longer press will switch to the next mode.
-
-unsigned char rotary_mode = TRACK;
-
-// Initial volume for the MP3 chip. 0 is the loudest, 255
-// is the lowest.
-
-unsigned char volume = 40;
-unsigned int vol_pin_value = 0;
-unsigned int vol_pin_value_old = 0;
-
-
-// Start up *not* playing:
-
-boolean playing = true;
-
-// Set loop_all to true if you would like to automatically
-// start playing the next file after the current one ends:
-
-boolean loop_all = true;
-
-
-
-#define TRACK_MODE 0
-#define SKIP_MODE 1
-unsigned char mode = TRACK_MODE;
-
-int32_t SKIP_STEP = 1000;
 
 
 // LilyPad MP3 pin definitions:
@@ -168,6 +49,7 @@ int trigger[5] = {TRIG1,TRIG2,TRIG3,TRIG4,TRIG5};
 #define VOL A1    // white cable, former green LED
 
 
+// MP3 library pins (just reused from original examples)
 
 #define SHDN_GPIO1 A2
 #define MP3_DREQ 2
@@ -182,48 +64,33 @@ int trigger[5] = {TRIG1,TRIG2,TRIG3,TRIG4,TRIG5};
 
 
 
+// Player modes
+const unsigned char TRACK_MODE = 0;
+const unsigned char SKIP_MODE = 1;
+unsigned char mode = TRACK_MODE;
 
-/*  Not used pins or former definition
-
-#define ROT_LEDR 10
-#define ROT_LEDG A1
-#define ROT_LEDB 5
-
-#define ROT_A 3
-#define ROT_B A3
-#define ROT_SW 4
-
-#define RIGHT A6
-#define LEFT A7
+const int32_t SKIP_STEP = 1000;
 
 
-// RGB LED colors (for common anode LED, 0 is on, 1 is off)
+// Volume settings and flags (0 is the loudest, 255 is the lowest)
+unsigned char volume = 40;              // Initial volume
+const unsigned char MIN_VOLUME = 128;
 
-#define OFF B111
-#define RED B110
-#define GREEN B101
-#define YELLOW B100
-#define BLUE B011
-#define PURPLE B010
-#define CYAN B001
-#define WHITE B000
+// (analog read) values at volume pin
+unsigned int vol_pin_value = 0;
+unsigned int vol_pin_value_old = 0;
 
 
-*/
+// Start up playing or not playing
+boolean playing = true;
 
 
+// Set loop_all to true if you would like to automatically
+// start playing the next file after the current one ends:
+boolean loop_all = true;
 
 
-
-// Global variables and flags for interrupt request functions:
-
-// volatile int rotary_counter = 0; // Current "position" of rotary encoder (increments CW)
-// volatile boolean rotary_change = false; // Will turn true if rotary_counter has changed
-// volatile boolean rotary_direction; // Direction rotary encoder was turned (true = CW)
-// volatile boolean button_pressed = false; // Will turn true if the button has been pushed
-// volatile boolean button_released = false; // Will turn true if the button has been released (sets button_downtime)
-// volatile unsigned long button_downtime = 0L; // ms the button was pushed before release
-
+// Flags for button presses
 
 volatile boolean prev_button_pressed = false;
 volatile boolean prev_button_released = false;
@@ -233,21 +100,20 @@ volatile boolean next_button_pressed = false;
 volatile boolean next_button_released = false;
 volatile unsigned long next_button_was_down_for = 0L;
 
+
 char track[13];   // TODO: Make it work with longer filenames
 
 
-
-
 // Library objects:
-
 SdFat sd;
 SdFile file;
 SFEMP3Shield MP3player;
 
 
-void setup()
-{
+void setup() {
+
   byte result;
+
 
   #ifdef DEBUG
 
@@ -260,10 +126,6 @@ void setup()
 
   #endif
 
-  if (debugging)
-  {
-
-  }
 
   // Set up I/O pins:
 
@@ -286,6 +148,8 @@ void setup()
   pinMode(VOL, INPUT);  // volume pin will be used as analog pin, so no pullup (?)
 
 
+  // MP3 library pins (just reused from original examples)
+
   pinMode(SHDN_GPIO1, OUTPUT);
   pinMode(MP3_CS, OUTPUT);
   pinMode(MP3_DREQ, INPUT);
@@ -297,100 +161,65 @@ void setup()
   pinMode(SCK, OUTPUT);
 
 
- // Turn off amplifier chip / turn on MP3 mode:
-
+  // Turn off amplifier chip / turn on MP3 mode:
   digitalWrite(SHDN_GPIO1, LOW);
-  // setLEDcolor(OFF);
 
-
-
-/* Not used anymore
-
-  pinMode(ROT_B, INPUT);
-  digitalWrite(ROT_B, HIGH); // turn on weak pullup
-  pinMode(ROT_A, INPUT);
-  digitalWrite(ROT_A, HIGH); // turn on weak pullup
-  pinMode(ROT_SW, INPUT);
-  // switch is common anode with external pulldown, do not turn on pullup
-
-  pinMode(ROT_LEDB, OUTPUT);
-  pinMode(ROT_LEDG, OUTPUT);
-  pinMode(ROT_LEDR, OUTPUT);
-
-
-*/
 
 
 
   // Initialize the SD card:
 
-  if (debugging) Serial.println(F("Initializing SD card... "));
+  DEBUG_PRINTLN(F("Initializing SD card... "));
 
   result = sd.begin(SD_SEL, SPI_HALF_SPEED);
 
-  if (result != 1)
-  {
-    if (debugging) Serial.println(F("error, halting"));
+  if (result != 1) {
+    DEBUG_PRINTLN(F("error, halting"));
     // errorBlink(1,RED);
   }
-  else
-    if (debugging) Serial.println(F("OK"));
+  else {
+    DEBUG_PRINTLN(F("OK"));
+  }
+
 
   //Initialize the MP3 chip:
-
-  if (debugging) Serial.println(F("Initializing MP3 chip... "));
+  DEBUG_PRINTLN(F("Initializing MP3 chip... "));
 
   result = MP3player.begin();
 
   // Check result, 0 and 6 are OK:
-
-  if((result != 0) && (result != 6))
-  {
-    if (debugging)
-    {
-      Serial.print(F("error "));
-      Serial.println(result);
-    }
+  if((result != 0) && (result != 6)) {
+    DEBUG_PRINT(F("error "));
+    DEBUG_PRINTLN(result);
     // errorBlink(result,BLUE);
   }
-  else
-    if (debugging) Serial.println(F("OK"));
+  else {
+    DEBUG_PRINTLN(F("OK"));
+  }
 
-  // Set up interrupts. We'll use the standard external interrupt
-  // pin for the rotary, but we'll use the pin change interrupt
-  // library for the button:
 
-  // attachInterrupt(1,rotaryIRQ,CHANGE);
-  // PCintPort::attachInterrupt(ROT_SW, &buttonIRQ, CHANGE);
+  // Set up interrupts.
+  // We'll use the pin change interrupt library
   PCintPort::attachInterrupt(PREV, &prevButtonIRQ, CHANGE);
   PCintPort::attachInterrupt(NEXT, &nextButtonIRQ, CHANGE);
 
 
-  Serial.println(sizeof(track));
+  DEBUG_PRINTLN(sizeof(track));
+
 
   // Get initial track:
-
   sd.chdir("/",true); // Index beginning of root directory
   getNextTrack();
-  if (debugging)
-  {
-    Serial.print(F("current track: "));
-    Serial.println(track);
-  }
+  DEBUG_PRINT(F("current track: "));
+  DEBUG_PRINTLN(track);
 
   // Set initial volume (same for both left and right channels)
-
   MP3player.setVolume(volume, volume);
-
-  // Initial mode for the rotary encoder
-
-  LEDmode(rotary_mode);
 
   // Uncomment to get a directory listing of the SD card:
   sd.ls(LS_R | LS_DATE | LS_SIZE);
 
   // Turn on amplifier chip:
-
   digitalWrite(SHDN_GPIO1, HIGH);
   delay(2);
 
@@ -501,26 +330,37 @@ void loop() {
 
   // TODO: prevent complete muting, so that it does not continue playing without being noticed
 
-  // read analog value from volume pin (0-1023)
-  // since 0 is the loudest on LilypadMP3 and we want to use a positive logarithmic potentionmeter
-  // for volume control, we switch the direction here by subtracting the measured value from the max value
+
+  // Volume on LilypadMP3 is a value between 0 and 255 with 0 being the loudest
+
+  // We don't want the player to run quietly without being noticed.
+  // Also, when a speaker is connected to the Lilypad, then the lower half of the
+  // volume range (255 to about 128) is very very quiet anyway (most likely too quiet).
+  // That's why we consider the minimum volume defined at the top.
+  // The potentiometer is then just adjusting withing the remaining volume
+  // range (i.e. between MIN_VOLUME and 0)
+
+
+  // Read analog value from volume pin (0-1023).
+  // At the pin, 0 means potentiomater is "closed", 1023 means full open.
+  // Since 0 is the loudest on LilypadMP3, we switch the direction here by subtracting
+  // the measured value from the max value (i.e. 1023)
   vol_pin_value = 1023 - analogRead(VOL);
 
   // we don't want to react on tiny shaky changes which are normal for analog input
   // so we check if the value at volume pin changed substantially (i.e. changed by more than 2)
   if ( abs(vol_pin_value - vol_pin_value_old) > 2 ) {
-    // Serial.print("New volume pin value: ");
-    // Serial.println(vol_pin_value);
+
     vol_pin_value_old = vol_pin_value;  // remember the pin value for comparison next time
 
-    // divide pin value by 4, so we get a value between 0 and 255,
-    // which can be used directly for setVolume method
-    unsigned char new_volume = vol_pin_value / 4;
+    // Divide the value at the volume pin in such a way, that the vol_pin_range (0-1023)
+    // evenly covers the volume range between 0 (loudest) and defined MIN_VOLUME
+    unsigned char new_volume = vol_pin_value / (1024 / MIN_VOLUME);
 
     // make sure that we call the setVolume method only if we really have a new volume value
     if (new_volume != volume) {
-      Serial.print("Setting volume to: ");
-      Serial.println(new_volume);
+      // DEBUG_PRINT("Setting volume to: ");
+      // DEBUG_PRINTLN(new_volume);
       volume = new_volume;
       MP3player.setVolume(volume, volume);  // set volume, same value for left and right speaker
     }
@@ -867,18 +707,7 @@ void LEDmode(unsigned char mode)
   // Change the RGB LED to a specific color for each mode
   // (See #defines at start of sketch for colors.)
 
-  switch (mode)
-  {
-    case TRACK:
-      // setLEDcolor(RED);
-      break;
-    case VOLUME:
-      // setLEDcolor(GREEN);
-      break;
-    default:
-      // setLEDcolor(OFF);
-      break;
-  }
+
 }
 
 
