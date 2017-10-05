@@ -1,5 +1,4 @@
 
-
 // Required libraries:
 
 #include <SPI.h>
@@ -34,47 +33,47 @@ boolean debugging = true;   // TODO: remove this, after DEBUG outputs have been 
 // Constants for the trigger input pins, which we'll place
 // in an array for convenience:
 
-#define TRIG1 A0
-#define TRIG2 A4
-#define TRIG3 A5
-#define TRIG4 1
-#define TRIG5 0
-int trigger[5] = {TRIG1,TRIG2,TRIG3,TRIG4,TRIG5};
+const byte TRIG1_PIN = A0;
+const byte TRIG2_PIN = A4;
+const byte TRIG3_PIN = A5;
+const byte TRIG4_PIN = 1;
+const byte TRIG5_PIN = 0;
+byte trigger[5] = {TRIG1_PIN,TRIG2_PIN,TRIG3_PIN,TRIG4_PIN,TRIG5_PIN};
 
 
-// #define PREV 5    // black cable, former blue LED
-#define PREV A3
-// #define NEXT 10   // red cable, former red LED
-#define NEXT 3
-#define VOL A1    // white cable, former green LED
+// #define PREV_PIN 5    // black cable, former blue LED
+const byte PREV_PIN = A3;
+// #define NEXT_PIN 10   // red cable, former red LED
+const byte NEXT_PIN = 3;
+const byte VOL_PIN = A1;    // white cable, former green LED
 
 
 // MP3 library pins (just reused from original examples)
 
-#define SHDN_GPIO1 A2
-#define MP3_DREQ 2
-#define MP3_CS 6
-#define MP3_DCS 7
-#define MP3_RST 8
-#define SD_CS 9
-#define MOSI 11
-#define MISO 12
-#define SCK 13
+const byte SHDN_GPIO1_PIN = A2;
+const byte MP3_DREQ_PIN = 2;
+const byte MP3_CS_PIN = 6;
+const byte MP3_DCS_PIN = 7;
+const byte MP3_RST_PIN = 8;
+const byte SD_CS_PIN = 9;
+const byte MOSI_PIN = 11;
+const byte MISO_PIN = 12;
+const byte SCK_PIN = 13;
 
 
 
 
 // Player modes
-const unsigned char TRACK_MODE = 0;
-const unsigned char SKIP_MODE = 1;
-unsigned char mode = TRACK_MODE;
+const byte TRACK_MODE = 0;
+const byte SKIP_MODE = 1;
+byte mode = TRACK_MODE;
 
-const int32_t SKIP_STEP = 1000;
+const int SKIP_STEP = 3000;     // milliseconds to skip with each skip step
 
 
 // Volume settings and flags (0 is the loudest, 255 is the lowest)
-unsigned char volume = 40;              // Initial volume
-const unsigned char MIN_VOLUME = 128;
+byte volume = 40;              // Initial volume
+const byte MIN_VOLUME = 128;
 
 // (analog read) values at volume pin
 unsigned int vol_pin_value = 0;
@@ -116,53 +115,51 @@ void setup() {
 
 
   #ifdef DEBUG
-
   Serial.begin(9600);
-  DEBUG_PRINTLN(F("Lilypad MP3 Player"));
+  #endif
 
   // ('F' places constant strings in program flash to save RAM)
+  DEBUG_PRINTLN(F("Lilypad MP3 Player"));
   DEBUG_PRINT(F("Free RAM = "));
   DEBUG_PRINTLNDEC(FreeStack());
 
-  #endif
+
 
 
   // Set up I/O pins:
 
-  pinMode(TRIG1, INPUT);
-  digitalWrite(TRIG1, HIGH);  // turn on weak pullup
-  pinMode(TRIG2, INPUT);
-  digitalWrite(TRIG2, HIGH);  // turn on weak pullup
-  pinMode(TRIG3, INPUT);
-  digitalWrite(TRIG3, HIGH);  // turn on weak pullup
-  pinMode(TRIG4, INPUT);
-  digitalWrite(TRIG4, HIGH);  // turn on weak pullup
-  pinMode(TRIG5, INPUT);
-  digitalWrite(TRIG5, HIGH);  // turn on weak pullup
+  pinMode(TRIG1_PIN, INPUT);
+  digitalWrite(TRIG1_PIN, HIGH);  // turn on weak pullup
+  pinMode(TRIG2_PIN, INPUT);
+  digitalWrite(TRIG2_PIN, HIGH);  // turn on weak pullup
+  pinMode(TRIG3_PIN, INPUT);
+  digitalWrite(TRIG3_PIN, HIGH);  // turn on weak pullup
+  pinMode(TRIG4_PIN, INPUT);
+  digitalWrite(TRIG4_PIN, HIGH);  // turn on weak pullup
+  pinMode(TRIG5_PIN, INPUT);
+  digitalWrite(TRIG5_PIN, HIGH);  // turn on weak pullup
 
-  pinMode(PREV, INPUT);
-  digitalWrite(PREV, HIGH);  // turn on weak pullup
-  pinMode(NEXT, INPUT);
-  digitalWrite(NEXT, HIGH);  // turn on weak pullup
+  pinMode(PREV_PIN, INPUT);
+  digitalWrite(PREV_PIN, HIGH);  // turn on weak pullup
+  pinMode(NEXT_PIN, INPUT);
+  digitalWrite(NEXT_PIN, HIGH);  // turn on weak pullup
 
-  pinMode(VOL, INPUT);  // volume pin will be used as analog pin, so no pullup (?)
+  pinMode(VOL_PIN, INPUT);  // volume pin will be used as analog pin, so no pullup (?)
 
 
   // MP3 library pins (just reused from original examples)
-
-  pinMode(SHDN_GPIO1, OUTPUT);
-  pinMode(MP3_CS, OUTPUT);
-  pinMode(MP3_DREQ, INPUT);
-  pinMode(MP3_DCS, OUTPUT);
-  pinMode(MP3_RST, OUTPUT);
-  pinMode(SD_CS, OUTPUT);
-  pinMode(MOSI, OUTPUT);
-  pinMode(MISO, INPUT);
-  pinMode(SCK, OUTPUT);
-
+  pinMode(SHDN_GPIO1_PIN, OUTPUT);
+  pinMode(MP3_CS_PIN, OUTPUT);
+  pinMode(MP3_DREQ_PIN, INPUT);
+  pinMode(MP3_DCS_PIN, OUTPUT);
+  pinMode(MP3_RST_PIN, OUTPUT);
+  pinMode(SD_CS_PIN, OUTPUT);
+  pinMode(MOSI_PIN, OUTPUT);
+  pinMode(MISO_PIN, INPUT);
+  pinMode(SCK_PIN, OUTPUT);
 
   // Turn off amplifier chip / turn on MP3 mode:
-  digitalWrite(SHDN_GPIO1, LOW);
+  digitalWrite(SHDN_GPIO1_PIN, LOW);
 
 
 
@@ -200,8 +197,8 @@ void setup() {
 
   // Set up interrupts.
   // We'll use the pin change interrupt library
-  PCintPort::attachInterrupt(PREV, &prevButtonIRQ, CHANGE);
-  PCintPort::attachInterrupt(NEXT, &nextButtonIRQ, CHANGE);
+  PCintPort::attachInterrupt(PREV_PIN, &prevButtonIRQ, CHANGE);
+  PCintPort::attachInterrupt(NEXT_PIN, &nextButtonIRQ, CHANGE);
 
 
   DEBUG_PRINTLN(sizeof(track));
@@ -220,7 +217,7 @@ void setup() {
   sd.ls(LS_R | LS_DATE | LS_SIZE);
 
   // Turn on amplifier chip:
-  digitalWrite(SHDN_GPIO1, HIGH);
+  digitalWrite(SHDN_GPIO1_PIN, HIGH);
   delay(2);
 
 }
@@ -345,7 +342,7 @@ void loop() {
   // At the pin, 0 means potentiomater is "closed", 1023 means full open.
   // Since 0 is the loudest on LilypadMP3, we switch the direction here by subtracting
   // the measured value from the max value (i.e. 1023)
-  vol_pin_value = 1023 - analogRead(VOL);
+  vol_pin_value = 1023 - analogRead(VOL_PIN);
 
   // we don't want to react on tiny shaky changes which are normal for analog input
   // so we check if the value at volume pin changed substantially (i.e. changed by more than 2)
@@ -605,14 +602,14 @@ void getNextFile()
 
   if (!result)
   {
-    Serial.println("looping around to beginning of directory");
+    Serial.println(F("looping around to beginning of directory"));
     sd.chdir("/",true);
     getNextTrack();
     return;
   }
   file.getName(track, 13);
   file.close();
-  Serial.print("Next file: ");
+  Serial.print(F("Next file: "));
   Serial.println(track);
 }
 
