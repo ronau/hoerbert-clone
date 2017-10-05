@@ -100,7 +100,19 @@ volatile boolean next_button_released = false;
 volatile unsigned long next_button_was_down_for = 0L;
 
 
-char track[13];   // TODO: Make it work with longer filenames
+
+const byte NUM_PLAYLIST = 5;    // Number of playlists
+const byte NUM_TRACKS = 30;     // Maximum number of tracks per playlist
+                                // Attention: increasing this number could cause memory issues
+
+
+char track[13] = "";            // Filename of current track (8.3 filename format supported only)
+byte track_index;               // Index of current track within current playlist (directory), starting with 0
+byte playlist_index;            // Index of current playlist, starting with 0
+
+char filename[NUM_TRACKS][13];  // All track names in current directory
+                                // - will be read and kept in RAM for sorting alphabetically
+byte num_tracks = 0;            // Number of playable tracks in current directory
 
 
 // Library objects:
@@ -201,12 +213,34 @@ void setup() {
   PCintPort::attachInterrupt(NEXT_PIN, &nextButtonIRQ, CHANGE);
 
 
-  DEBUG_PRINTLN(sizeof(track));
+  DEBUG_PRINTLN(F("Initial filenames:"));
+  for (byte i = 0; i < NUM_TRACKS; i++) {
+    DEBUG_PRINT(i);
+    DEBUG_PRINT(F("    >"));
+    DEBUG_PRINT(filename[i]);
+    DEBUG_PRINTLN(F("<"));
+  }
 
 
   // Get initial track:
-  sd.chdir("/",true); // Index beginning of root directory
-  getNextTrack();
+  sd.chdir("/", true); // Index beginning of root directory
+  // getNextTrack();
+
+  scanCurrentDirectory();
+
+  DEBUG_PRINTLN(F(""));
+  DEBUG_PRINTLN(F(""));
+  DEBUG_PRINTLN(F("Scanned filenames:"));
+  for (byte i = 0; i < NUM_TRACKS; i++) {
+    DEBUG_PRINT(i);
+    DEBUG_PRINT(F("    >"));
+    DEBUG_PRINT(filename[i]);
+    DEBUG_PRINTLN(F("<"));
+  }
+
+  DEBUG_PRINT(F("Number of tracks: "));
+  DEBUG_PRINTLN(num_tracks);
+
   DEBUG_PRINT(F("current track: "));
   DEBUG_PRINTLN(track);
 
@@ -547,6 +581,42 @@ void loop() {
 }
 
 
+void scanCurrentDirectory() {
+
+  num_tracks = 0;
+
+  // get the first playable file
+  do
+    getNextFile();
+  while(isPlayable() != true);
+
+
+  // loop through the directory
+  do {
+
+    strcpy(filename[num_tracks], track);   // copy name of current track to our array
+    num_tracks += 1;
+
+    // pick the next playable file
+    do
+      getNextFile();
+    while(isPlayable() != true);
+
+  }
+  // stop, if the first filename is reached again OR if we have NUM_TRACKS tracks already
+  while( strcasecmp(track, filename[0]) != 0  ||  num_tracks >= NUM_TRACKS );
+
+
+  // sort the array alphabetically
+  qsort(filename, NUM_TRACKS, sizeof(filename[0]), filenameCompare);
+
+
+  strcpy(track, filename[0]);   // Set first filename in array as current track
+  track_index = 0;
+
+}
+
+
 void changeVolume(boolean direction)
 {
   // Increment or decrement the volume.
@@ -696,6 +766,34 @@ boolean isPlayable()
     return true;
   else
     return false;
+}
+
+
+int filenameCompare (const void* p1, const void* p2) {
+
+  char* string1 = p1;
+  char* string2 = p2;
+
+  // DEBUG_PRINT("Compare --- ");
+  // DEBUG_PRINT(string1);
+  // DEBUG_PRINT(" --- ");
+  // DEBUG_PRINTLN(string2);
+
+
+  // If one of the strings is empty, the other one will be considered as being the smaller string.
+  // If both strings are empty (we don't check that explicitly), the first one will be considered smaller.
+  // Thus, empty string get sorted to the end of the array.
+
+  if (strcmp(string2, "") == 0) {
+    return -1;
+  }
+  else if (strcmp(string1, "") == 0) {
+    return 1;
+  }
+  else {
+    return strcmp(p1, p2);
+  }
+
 }
 
 
