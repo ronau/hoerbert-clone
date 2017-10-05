@@ -101,8 +101,8 @@ volatile unsigned long next_button_was_down_for = 0L;
 
 
 
-const byte NUM_PLAYLIST = 5;    // Number of playlists
-const byte NUM_TRACKS = 30;     // Maximum number of tracks per playlist
+const byte MAX_PLAYLIST = 5;    // Number of playlists
+const byte MAX_TRACKS = 30;     // Maximum number of tracks per playlist
                                 // Attention: increasing this number could cause memory issues
 
 
@@ -110,7 +110,7 @@ char track[13] = "";            // Filename of current track (8.3 filename forma
 byte track_index;               // Index of current track within current playlist (directory), starting with 0
 byte playlist_index;            // Index of current playlist, starting with 0
 
-char filename[NUM_TRACKS][13];  // All track names in current directory
+char filename[MAX_TRACKS][13];  // All track names in current directory
                                 // - will be read and kept in RAM for sorting alphabetically
 byte num_tracks = 0;            // Number of playable tracks in current directory
 
@@ -214,7 +214,7 @@ void setup() {
 
 
   DEBUG_PRINTLN(F("Initial filenames:"));
-  for (byte i = 0; i < NUM_TRACKS; i++) {
+  for (byte i = 0; i < MAX_TRACKS; i++) {
     DEBUG_PRINT(i);
     DEBUG_PRINT(F("    >"));
     DEBUG_PRINT(filename[i]);
@@ -231,7 +231,7 @@ void setup() {
   DEBUG_PRINTLN(F(""));
   DEBUG_PRINTLN(F(""));
   DEBUG_PRINTLN(F("Scanned filenames:"));
-  for (byte i = 0; i < NUM_TRACKS; i++) {
+  for (byte i = 0; i < MAX_TRACKS; i++) {
     DEBUG_PRINT(i);
     DEBUG_PRINT(F("    >"));
     DEBUG_PRINT(filename[i]);
@@ -253,6 +253,8 @@ void setup() {
   // Turn on amplifier chip:
   digitalWrite(SHDN_GPIO1_PIN, HIGH);
   delay(2);
+
+  startPlaying();     // Start playing the current track
 
 }
 
@@ -603,12 +605,12 @@ void scanCurrentDirectory() {
     while(isPlayable() != true);
 
   }
-  // stop, if the first filename is reached again OR if we have NUM_TRACKS tracks already
-  while( strcasecmp(track, filename[0]) != 0  ||  num_tracks >= NUM_TRACKS );
+  // stop, if the first filename is reached again OR if we have MAX_TRACKS tracks already
+  while( strcasecmp(track, filename[0]) != 0  ||  num_tracks >= MAX_TRACKS );
 
 
   // sort the array alphabetically
-  qsort(filename, NUM_TRACKS, sizeof(filename[0]), filenameCompare);
+  qsort(filename, MAX_TRACKS, sizeof(filename[0]), filenameCompare);
 
 
   strcpy(track, filename[0]);   // Set first filename in array as current track
@@ -641,23 +643,32 @@ void changeVolume(boolean direction)
 
 void getNextTrack()
 {
-  // Get the next playable track (check extension to be
-  // sure it's an audio file)
 
-  do
-    getNextFile();
-  while(isPlayable() != true);
+  track_index += 1;
+
+  // If track index is out of range (i.e. beyond the actual list of tracks), then reset to zero (i.e. first file)
+  if (track_index >= num_tracks) {
+    track_index = 0;
+  }
+
+  strcpy(track, filename[track_index]);   // Get name of current track from filename array
+
 }
 
 
 void getPrevTrack()
 {
-  // Get the previous playable track (check extension to be
-  // sure it's an audio file)
 
-  do
-    getPrevFile();
-  while(isPlayable() != true);
+  // If current track is already the first one, we set track_index to the last possible index (i.e. list size - 1)
+  if (track_index == 0) {
+    track_index = num_tracks - 1;
+  }
+  else {
+    track_index -= 1;
+  }
+
+  strcpy(track, filename[track_index]);   // Get name of current track from filename array
+
 }
 
 
@@ -673,8 +684,8 @@ void getNextFile()
   if (!result)
   {
     Serial.println(F("looping around to beginning of directory"));
-    sd.chdir("/",true);
-    getNextTrack();
+    sd.chdir("/", true);
+    getNextFile();
     return;
   }
   file.getName(track, 13);
