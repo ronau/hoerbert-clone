@@ -16,13 +16,17 @@ boolean debugging = true;   // TODO: remove this, after DEBUG outputs have been 
 #define DEBUG    // remove or comment to disable debugging
 
 #ifdef DEBUG
-#define DEBUG_PRINT(x) Serial.print(x)
-#define DEBUG_PRINTLN(x) Serial.println(x)
-#define DEBUG_PRINTLNDEC(x) Serial.println(x, DEC)
+#define DPRINT(x) Serial.print(x)
+#define DPRINTF(x) Serial.print(F(x))
+#define DPRINTLN(x) Serial.println(x)
+#define DPRINTLNF(x) Serial.println(F(x))
+#define DPRINTLNDEC(x) Serial.println(x, DEC)
 #else
-#define DEBUG_PRINT(x)
-#define DEBUG_PRINTLN(x)
-#define DEBUG_PRINTLNDEC(x) Serial.println(x, DEC)
+#define DPRINT(x)
+#define DPRINTF(x)
+#define DPRINTLN(x)
+#define DPRINTLNF(x)
+#define DPRINTLNDEC(x) Serial.println(x, DEC)
 #endif
 
 
@@ -99,6 +103,23 @@ volatile boolean next_button_pressed = false;
 volatile boolean next_button_released = false;
 volatile unsigned long next_button_was_down_for = 0L;
 
+volatile boolean trigger1_pressed = false;
+volatile boolean trigger1_released = false;
+volatile boolean trigger2_pressed = false;
+volatile boolean trigger2_released = false;
+volatile boolean trigger3_pressed = false;
+volatile boolean trigger3_released = false;
+volatile boolean trigger4_pressed = false;
+volatile boolean trigger4_released = false;
+volatile boolean trigger5_pressed = false;
+volatile boolean trigger5_released = false;
+
+volatile unsigned long trigger1_was_down_for = 0L;
+volatile unsigned long trigger2_was_down_for = 0L;
+volatile unsigned long trigger3_was_down_for = 0L;
+volatile unsigned long trigger4_was_down_for = 0L;
+volatile unsigned long trigger5_was_down_for = 0L;
+
 
 
 const byte MAX_PLAYLIST = 5;    // Number of playlists
@@ -131,9 +152,9 @@ void setup() {
   #endif
 
   // ('F' places constant strings in program flash to save RAM)
-  DEBUG_PRINTLN(F("Lilypad MP3 Player"));
-  DEBUG_PRINT(F("Free RAM = "));
-  DEBUG_PRINTLNDEC(FreeStack());
+  DPRINTLNF("Lilypad MP3 Player");
+  DPRINTF("Free RAM = ");
+  DPRINTLNDEC(FreeStack());
 
 
 
@@ -178,32 +199,32 @@ void setup() {
 
   // Initialize the SD card:
 
-  DEBUG_PRINTLN(F("Initializing SD card... "));
+  DPRINTLNF("Initializing SD card... ");
 
   result = sd.begin(SD_SEL, SPI_HALF_SPEED);
 
   if (result != 1) {
-    DEBUG_PRINTLN(F("error, halting"));
+    DPRINTLNF("error, halting");
     // errorBlink(1,RED);
   }
   else {
-    DEBUG_PRINTLN(F("OK"));
+    DPRINTLNF("OK");
   }
 
 
   //Initialize the MP3 chip:
-  DEBUG_PRINTLN(F("Initializing MP3 chip... "));
+  DPRINTLNF("Initializing MP3 chip... ");
 
   result = MP3player.begin();
 
   // Check result, 0 and 6 are OK:
   if((result != 0) && (result != 6)) {
-    DEBUG_PRINT(F("error "));
-    DEBUG_PRINTLN(result);
+    DPRINTF("error ");
+    DPRINTLN(result);
     // errorBlink(result,BLUE);
   }
   else {
-    DEBUG_PRINTLN(F("OK"));
+    DPRINTLNF("OK");
   }
 
 
@@ -212,13 +233,21 @@ void setup() {
   PCintPort::attachInterrupt(PREV_PIN, &prevButtonIRQ, CHANGE);
   PCintPort::attachInterrupt(NEXT_PIN, &nextButtonIRQ, CHANGE);
 
+  PCintPort::attachInterrupt(TRIG1_PIN, &trigger1IRQ, CHANGE);
+  PCintPort::attachInterrupt(TRIG2_PIN, &trigger2IRQ, CHANGE);
+  PCintPort::attachInterrupt(TRIG3_PIN, &trigger3IRQ, CHANGE);
+  #ifndef DEBUG
+  PCintPort::attachInterrupt(TRIG4_PIN, &trigger4IRQ, CHANGE);
+  PCintPort::attachInterrupt(TRIG5_PIN, &trigger5IRQ, CHANGE);
+  #endif
 
-  DEBUG_PRINTLN(F("Initial filenames:"));
+
+  DPRINTLNF("Initial filenames:");
   for (byte i = 0; i < MAX_TRACKS; i++) {
-    DEBUG_PRINT(i);
-    DEBUG_PRINT(F("    >"));
-    DEBUG_PRINT(filename[i]);
-    DEBUG_PRINTLN(F("<"));
+    DPRINT(i);
+    DPRINTF("    >");
+    DPRINT(filename[i]);
+    DPRINTLNF("<");
   }
 
 
@@ -228,21 +257,21 @@ void setup() {
 
   scanCurrentDirectory();
 
-  DEBUG_PRINTLN(F(""));
-  DEBUG_PRINTLN(F(""));
-  DEBUG_PRINTLN(F("Scanned filenames:"));
+  DPRINTLNF("");
+  DPRINTLNF("");
+  DPRINTLNF("Scanned filenames:");
   for (byte i = 0; i < MAX_TRACKS; i++) {
-    DEBUG_PRINT(i);
-    DEBUG_PRINT(F("    >"));
-    DEBUG_PRINT(filename[i]);
-    DEBUG_PRINTLN(F("<"));
+    DPRINT(i);
+    DPRINTF("    >");
+    DPRINT(filename[i]);
+    DPRINTLNF("<");
   }
 
-  DEBUG_PRINT(F("Number of tracks: "));
-  DEBUG_PRINTLN(num_tracks);
+  DPRINTF("Number of tracks: ");
+  DPRINTLN(num_tracks);
 
-  DEBUG_PRINT(F("current track: "));
-  DEBUG_PRINTLN(track);
+  DPRINTF("current track: ");
+  DPRINTLN(track);
 
   // Set initial volume (same for both left and right channels)
   MP3player.setVolume(volume, volume);
@@ -259,7 +288,8 @@ void setup() {
 }
 
 
-// TODO: prevent prev and next button from overlapping (i.e. when pressed simultaneously)
+// TODO: prevent buttons from overlapping (i.e. when pressed at the same time)
+
 
 void prevButtonIRQ() {
 
@@ -270,10 +300,8 @@ void prevButtonIRQ() {
   // Serial.print(" state: ");
   // Serial.println(PCintPort::pinState);
 
-
   static boolean prev_button_state = false;
   static unsigned long prev_start, prev_end;
-
 
   // if button is currently being pressed down, but was up before
   if ( (PCintPort::pinState == LOW) && (prev_button_state == false) ) {
@@ -285,6 +313,7 @@ void prevButtonIRQ() {
     }
 
   }
+
   // button has been released but was down before
   else if ( (PCintPort::pinState == HIGH) && (prev_button_state == true) ) {
 
@@ -300,20 +329,10 @@ void prevButtonIRQ() {
 }
 
 
-// TODO: prevent prev and next button from overlapping (i.e. when pressed simultaneously)
-
 void nextButtonIRQ() {
-
-  // Raw information from PinChangeInt library:
-
-  // Serial.print("pin: ");
-  // Serial.print(PCintPort::arduinoPin);
-  // Serial.print(" state: ");
-  // Serial.println(PCintPort::pinState);
 
   static boolean next_button_state = false;
   static unsigned long next_start, next_end;
-
 
   // if button is currently being pressed down, but was up before
   if ( (PCintPort::pinState == LOW) && (next_button_state == false) ) {
@@ -325,6 +344,7 @@ void nextButtonIRQ() {
     }
 
   }
+
   // button has been released but was down before
   else if ( (PCintPort::pinState == HIGH) && (next_button_state = true) ) {
 
@@ -340,19 +360,192 @@ void nextButtonIRQ() {
 }
 
 
+void trigger1IRQ() {
+
+  static boolean trigger1_state = false;
+  static unsigned long t1_start, t1_end;
+
+  // if button is currently being pressed down, but was up before
+  if ( (PCintPort::pinState == LOW) && (trigger1_state == false) ) {
+
+    t1_start = millis();    // discard button presses too close together (debounce)
+    if (t1_start > (t1_end + 10) ) {  // 10 ms debounce timer
+      trigger1_state = true;
+      trigger1_pressed = true;  // this is the flag the main loop can react on
+    }
+  }
+
+  // button has been released but was down before
+  else if ( (PCintPort::pinState == HIGH) && (trigger1_state == true) ) {
+
+    t1_end = millis();  // discard button releases too close together (debounce)
+    if (t1_end > (t1_start + 10) ) {  // 10 ms debounce timer
+      trigger1_state = false;
+      trigger1_released = true;   // this is the flag the main loop can react on
+      trigger1_was_down_for = t1_end - t1_start;
+    }
+  }
+
+}
+
+
+void trigger2IRQ() {
+
+  static boolean trigger2_state = false;
+  static unsigned long t2_start, t2_end;
+
+  // if button is currently being pressed down, but was up before
+  if ( (PCintPort::pinState == LOW) && (trigger2_state == false) ) {
+
+    t2_start = millis();    // discard button presses too close together (debounce)
+    if (t2_start > (t2_end + 10) ) {  // 10 ms debounce timer
+      trigger2_state = true;
+      trigger2_pressed = true;  // this is the flag the main loop can react on
+    }
+  }
+
+  // button has been released but was down before
+  else if ( (PCintPort::pinState == HIGH) && (trigger2_state == true) ) {
+
+    t2_end = millis();  // discard button releases too close together (debounce)
+    if (t2_end > (t2_start + 10) ) {  // 10 ms debounce timer
+      trigger2_state = false;
+      trigger2_released = true;   // this is the flag the main loop can react on
+      trigger2_was_down_for = t2_end - t2_start;
+    }
+  }
+
+}
+
+
+void trigger3IRQ() {
+
+  static boolean trigger3_state = false;
+  static unsigned long t3_start, t3_end;
+
+  // if button is currently being pressed down, but was up before
+  if ( (PCintPort::pinState == LOW) && (trigger3_state == false) ) {
+
+    t3_start = millis();    // discard button presses too close together (debounce)
+    if (t3_start > (t3_end + 10) ) {  // 10 ms debounce timer
+      trigger3_state = true;
+      trigger3_pressed = true;  // this is the flag the main loop can react on
+    }
+  }
+
+  // button has been released but was down before
+  else if ( (PCintPort::pinState == HIGH) && (trigger3_state == true) ) {
+
+    t3_end = millis();  // discard button releases too close together (debounce)
+    if (t3_end > (t3_start + 10) ) {  // 10 ms debounce timer
+      trigger3_state = false;
+      trigger3_released = true;   // this is the flag the main loop can react on
+      trigger3_was_down_for = t3_end - t3_start;
+    }
+  }
+
+}
+
+
+void trigger4IRQ() {
+
+  static boolean trigger4_state = false;
+  static unsigned long t4_start, t4_end;
+
+  // if button is currently being pressed down, but was up before
+  if ( (PCintPort::pinState == LOW) && (trigger4_state == false) ) {
+
+    t4_start = millis();    // discard button presses too close together (debounce)
+    if (t4_start > (t4_end + 10) ) {  // 10 ms debounce timer
+      trigger4_state = true;
+      trigger4_pressed = true;  // this is the flag the main loop can react on
+    }
+  }
+
+  // button has been released but was down before
+  else if ( (PCintPort::pinState == HIGH) && (trigger4_state == true) ) {
+
+    t4_end = millis();  // discard button releases too close together (debounce)
+    if (t4_end > (t4_start + 10) ) {  // 10 ms debounce timer
+      trigger4_state = false;
+      trigger4_released = true;   // this is the flag the main loop can react on
+      trigger4_was_down_for = t4_end - t4_start;
+    }
+  }
+
+}
+
+
+void trigger5IRQ() {
+
+  static boolean trigger5_state = false;
+  static unsigned long t5_start, t5_end;
+
+  // if button is currently being pressed down, but was up before
+  if ( (PCintPort::pinState == LOW) && (trigger5_state == false) ) {
+
+    t5_start = millis();    // discard button presses too close together (debounce)
+    if (t5_start > (t5_end + 10) ) {  // 10 ms debounce timer
+      trigger5_state = true;
+      trigger5_pressed = true;  // this is the flag the main loop can react on
+    }
+  }
+
+  // button has been released but was down before
+  else if ( (PCintPort::pinState == HIGH) && (trigger5_state == true) ) {
+
+    t5_end = millis();  // discard button releases too close together (debounce)
+    if (t5_end > (t5_start + 10) ) {  // 10 ms debounce timer
+      trigger5_state = false;
+      trigger5_released = true;   // this is the flag the main loop can react on
+      trigger5_was_down_for = t5_end - t5_start;
+    }
+  }
+
+}
+
+
+
+
 
 
 void loop() {
 
-  // "Static" variables are initalized once the first time
-  // the loop runs, but they keep their values through
-  // successive loops.
+  // "Static" variables are initalized the first time the loop runs,
+  // but they keep their values through successive loops.
 
   static boolean prev_button_down = false;
   static unsigned long int prev_button_down_start, prev_button_downtime;
 
   static boolean next_button_down = false;
   static unsigned long int next_button_down_start, next_button_downtime;
+
+  if (trigger1_pressed) {
+    DPRINTLNF("Trigger 1 pressed.");
+    trigger1_pressed = false;
+  }
+  if (trigger1_released) {
+    DPRINTLNF("Trigger 1 released.");
+    trigger1_released = false;
+  }
+
+  if (trigger2_pressed) {
+    DPRINTLNF("Trigger 2 pressed.");
+    trigger2_pressed = false;
+  }
+  if (trigger2_released) {
+    DPRINTLNF("Trigger 2 released.");
+    trigger2_released = false;
+  }
+
+  if (trigger3_pressed) {
+    DPRINTLNF("Trigger 3 pressed.");
+    trigger3_pressed = false;
+  }
+  if (trigger3_released) {
+    DPRINTLNF("Trigger 3 released.");
+    trigger3_released = false;
+  }
 
 
   // DELETE ME: static boolean reported = false;
@@ -392,8 +585,8 @@ void loop() {
 
     // make sure that we call the setVolume method only if we really have a new volume value
     if (new_volume != volume) {
-      // DEBUG_PRINT("Setting volume to: ");
-      // DEBUG_PRINTLN(new_volume);
+      // DPRINT("Setting volume to: ");
+      // DPRINTLN(new_volume);
       volume = new_volume;
       MP3player.setVolume(volume, volume);  // set volume, same value for left and right speaker
     }
@@ -462,15 +655,15 @@ void loop() {
 
       mode = SKIP_MODE;
 
-      DEBUG_PRINTLN(F("Rewinding ..."));
+      DPRINTLNF("Rewinding ...");
       uint8_t result;
       result = MP3player.skip(SKIP_STEP * -1);
       if(result != 0) {
-        DEBUG_PRINT(F("Error code: "));
-        DEBUG_PRINT(result);
-        DEBUG_PRINT(F(" when trying to rewind track. Jumping to beginning of track: "));
+        DPRINTF("Error code: ");
+        DPRINT(result);
+        DPRINTF(" when trying to rewind track. Jumping to beginning of track: ");
         result = MP3player.skipTo(0);
-        DEBUG_PRINTLN(result);
+        DPRINTLN(result);
         prev_button_down = false;
       }
 
@@ -538,8 +731,6 @@ void loop() {
     if (next_button_downtime > 1000) {
 
       mode = SKIP_MODE;
-
-      //log(F("Fast forwarding ..."), true);
 
       if (debugging) {
         Serial.println(F("Fast forwarding ..."));
@@ -785,10 +976,10 @@ int filenameCompare (const void* p1, const void* p2) {
   char* string1 = p1;
   char* string2 = p2;
 
-  // DEBUG_PRINT("Compare --- ");
-  // DEBUG_PRINT(string1);
-  // DEBUG_PRINT(" --- ");
-  // DEBUG_PRINTLN(string2);
+  // DPRINT("Compare --- ");
+  // DPRINT(string1);
+  // DPRINT(" --- ");
+  // DPRINTLN(string2);
 
 
   // If one of the strings is empty, the other one will be considered as being the smaller string.
@@ -851,17 +1042,4 @@ void errorBlink(int blinks, byte color)
   }
 }
 
-
-void log(char *message, boolean linebreak) {
-
-  if (debugging) {
-    if (linebreak) {
-      Serial.println(message);
-    }
-    else {
-      Serial.print(message);
-    }
-  }
-
-}
 
