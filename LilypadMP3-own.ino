@@ -126,6 +126,9 @@ const byte MAX_PLAYLIST = 5;    // Number of playlists
 const byte MAX_TRACKS = 30;     // Maximum number of tracks per playlist
                                 // Attention: increasing this number could cause memory issues
 
+// The folder names for the playlists
+const char* playlist_folder[] = {"/01", "/02", "/03", "/04", "/05"};
+
 
 char track[13] = "";            // Filename of current track (8.3 filename format supported only)
 byte track_index;               // Index of current track within current playlist (directory), starting with 0
@@ -241,49 +244,24 @@ void setup() {
   PCintPort::attachInterrupt(TRIG5_PIN, &trigger5IRQ, CHANGE);
   #endif
 
-
-  DPRINTLNF("Initial filenames:");
-  for (byte i = 0; i < MAX_TRACKS; i++) {
-    DPRINT(i);
-    DPRINTF("    >");
-    DPRINT(filename[i]);
-    DPRINTLNF("<");
-  }
+  // TODO: read last playlist from flash
+  changePlaylist(0);
 
 
-  // Get initial track:
-  sd.chdir("/", true); // Index beginning of root directory
-  // getNextTrack();
-
-  scanCurrentDirectory();
-
-  DPRINTLNF("");
-  DPRINTLNF("");
-  DPRINTLNF("Scanned filenames:");
-  for (byte i = 0; i < MAX_TRACKS; i++) {
-    DPRINT(i);
-    DPRINTF("    >");
-    DPRINT(filename[i]);
-    DPRINTLNF("<");
-  }
-
-  DPRINTF("Number of tracks: ");
-  DPRINTLN(num_tracks);
-
-  DPRINTF("current track: ");
-  DPRINTLN(track);
-
+  // TODO: read initial volume from volume pin
   // Set initial volume (same for both left and right channels)
   MP3player.setVolume(volume, volume);
 
   // Uncomment to get a directory listing of the SD card:
-  sd.ls(LS_R | LS_DATE | LS_SIZE);
+  // sd.ls(LS_R | LS_DATE | LS_SIZE);
 
   // Turn on amplifier chip:
   digitalWrite(SHDN_GPIO1_PIN, HIGH);
   delay(2);
 
   startPlaying();     // Start playing the current track
+
+  MP3player.setMonoMode(1);   // Enable mono mode
 
 }
 
@@ -527,6 +505,9 @@ void loop() {
   if (trigger1_released) {
     DPRINTLNF("Trigger 1 released.");
     trigger1_released = false;
+    stopPlaying();
+    changePlaylist(0);
+    startPlaying();
   }
 
   if (trigger2_pressed) {
@@ -536,6 +517,9 @@ void loop() {
   if (trigger2_released) {
     DPRINTLNF("Trigger 2 released.");
     trigger2_released = false;
+    stopPlaying();
+    changePlaylist(1);
+    startPlaying();
   }
 
   if (trigger3_pressed) {
@@ -545,6 +529,9 @@ void loop() {
   if (trigger3_released) {
     DPRINTLNF("Trigger 3 released.");
     trigger3_released = false;
+    stopPlaying();
+    changePlaylist(2);
+    startPlaying();
   }
 
 
@@ -774,34 +761,58 @@ void loop() {
 }
 
 
+void changePlaylist(byte pl) {
+
+  if (pl > -1 && pl < MAX_PLAYLIST) {   // check that provided playlist number is within allowed range
+
+    if ( sd.chdir(playlist_folder[pl], true) ) {  // if change into folder was successful
+
+      playlist_index = pl;
+      // sd.ls(LS_R | LS_DATE | LS_SIZE);
+      DPRINTF("Switched to directory ");
+      DPRINTLN(playlist_folder[pl]);
+      scanCurrentDirectory();
+
+    }
+
+  }
+}
+
+
 void scanCurrentDirectory() {
 
+  // Clear current list of tracks
   num_tracks = 0;
-
-  // get the first playable file
-  do
-    getNextFile();
-  while(isPlayable() != true);
+  for (byte i = 0; i < MAX_TRACKS; i++) {
+    strcpy(filename[i], "");
+  }
 
 
-  // loop through the directory
-  do {
+  // go through the directory until we reach our file number limit
+  while (num_tracks < MAX_TRACKS) {
+
+    // grab next playable file from directory
+    do
+      getNextFile();
+    while (isPlayable() != true);
+
+    // if first filename is reached again, cancel the loop
+    if (strcasecmp(track, filename[0]) == 0)
+      break;
 
     strcpy(filename[num_tracks], track);   // copy name of current track to our array
     num_tracks += 1;
 
-    // pick the next playable file
-    do
-      getNextFile();
-    while(isPlayable() != true);
-
   }
-  // stop, if the first filename is reached again OR if we have MAX_TRACKS tracks already
-  while( strcasecmp(track, filename[0]) != 0  ||  num_tracks >= MAX_TRACKS );
 
 
   // sort the array alphabetically
   qsort(filename, MAX_TRACKS, sizeof(filename[0]), filenameCompare);
+
+  DPRINTF("Found ");
+  DPRINT(num_tracks);
+  DPRINTF(" tracks in directory ");
+  DPRINTLN(playlist_folder[playlist_index]);
 
 
   strcpy(track, filename[0]);   // Set first filename in array as current track
@@ -875,7 +886,7 @@ void getNextFile()
   if (!result)
   {
     Serial.println(F("looping around to beginning of directory"));
-    sd.chdir("/", true);
+    sd.chdir(playlist_folder[playlist_index], true);
     getNextFile();
     return;
   }
@@ -999,47 +1010,5 @@ int filenameCompare (const void* p1, const void* p2) {
 }
 
 
-void LEDmode(unsigned char mode)
-{
-  // Change the RGB LED to a specific color for each mode
-  // (See #defines at start of sketch for colors.)
-
-
-}
-
-
-void setLEDcolor(unsigned char color)
-{
-  // Set the RGB LED in the (optional) rotary encoder
-  // to a specific color. See the color #defines at the
-  // start of this sketch.
-
-  // digitalWrite(ROT_LEDR,color & B001);
-  // digitalWrite(ROT_LEDG,color & B010);
-  // digitalWrite(ROT_LEDB,color & B100);
-}
-
-
-void errorBlink(int blinks, byte color)
-{
-  // This function will blink the RGB LED in the rotary encoder
-  // (optional) a given number of times and repeat forever.
-  // This is so you can see error codes without having to use
-  // the serial monitor window.
-
-  int x;
-
-  while(true) // Loop forever
-  {
-    for (x=0; x < blinks; x++) // Blink a given number of times
-    {
-      setLEDcolor(color);
-      delay(250);
-      // setLEDcolor(OFF);
-      delay(250);
-    }
-    delay(1500); // Longer pause between blink-groups
-  }
-}
 
 
