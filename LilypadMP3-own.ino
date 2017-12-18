@@ -245,7 +245,6 @@ void setup() {
   changePlaylist(0);
 
 
-  // TODO: read initial volume from volume pin
   // Set initial volume (same for both left and right channels)
   MP3player.setVolume(volume, volume);
 
@@ -262,7 +261,6 @@ void setup() {
 
 }
 
-// TODO: Handle empty playlists/folders
 
 
 // TODO: prevent buttons from overlapping (i.e. when pressed at the same time)
@@ -802,7 +800,13 @@ void changePlaylist(byte pl) {
       DPRINTF("Switched to directory ");
       DPRINTLN(playlist_folder[pl]);
       scanCurrentDirectory();
+      playing = true;   // if player was stopped, now we want it to play again
 
+    }
+    else {  // folder change was not successful
+      DPRINTF("Switching to directory ");
+      DPRINT(playlist_folder[pl]);
+      DPRINTLNF(" failed.");
     }
 
   }
@@ -816,14 +820,19 @@ void scanCurrentDirectory() {
   for (byte i = 0; i < MAX_TRACKS; i++) {
     strcpy(filename[i], "");
   }
+  strcpy(track, "");  // clear current track, too
 
 
   // go through the directory until we reach our file number limit
   while (num_tracks < MAX_TRACKS) {
 
     // grab next playable file from directory
-    do
-      getNextFile();
+    do {
+      if (! getNextFile() ) {  // if no next file can be determined,
+        DPRINTLNF("No next file found. Canceling directory scan.");
+        return;                // leave this method completely
+      }
+    }
     while (isPlayable() != true);
 
     // if first filename is reached again, cancel the loop
@@ -875,14 +884,22 @@ void changeVolume(boolean direction) {
 
 void getNextTrack() {
 
-  track_index += 1;
-
-  // If track index is out of range (i.e. beyond the actual list of tracks), then reset to zero (i.e. first file)
-  if (track_index >= num_tracks) {
-    track_index = 0;
+  if (num_tracks == 0) {    // if there are no tracks to play, set playing flag to false
+    playing = false;
   }
 
-  strcpy(track, filename[track_index]);   // Get name of current track from filename array
+  else {                    // otherwise set next track as current track
+
+    track_index += 1;
+
+    // If track index is out of range (i.e. beyond the actual list of tracks), then reset to zero (i.e. first file)
+    if (track_index >= num_tracks) {
+      track_index = 0;
+    }
+
+    strcpy(track, filename[track_index]);   // Get name of current track from filename array
+  }
+
 
 }
 
@@ -902,25 +919,39 @@ void getPrevTrack() {
 }
 
 
-void getNextFile() {
-  // Get the next file (which may be playable or not)
+boolean getNextFile() {
 
+  static byte loops = 0;
+
+  // Get the next file (which may be playable or not)
   int result = (file.openNext(sd.vwd(), O_READ));
 
-  // If we're at the end of the directory,
-  // loop around to the beginning:
+  // If we're at the end of the directory, loop around to the beginning.
+  // Or cancel, if we are looping already for the 2nd time.
+  if (!result) {
 
-  if (!result)
-  {
-    Serial.println(F("looping around to beginning of directory"));
-    sd.chdir(playlist_folder[playlist_index], true);
-    getNextFile();
-    return;
+    if (loops > 0) {
+      DPRINTLNF("Looping around for 2nd time already. Canceling.");
+      loops = 0;
+      return false;
+    }
+
+    else {
+      DPRINTLNF("Looping around to beginning of directory");
+      loops += 1;
+      sd.chdir(playlist_folder[playlist_index], true);
+      return getNextFile();
+    }
+
   }
+
   file.getName(track, 13);
   file.close();
-  Serial.print(F("Next file: "));
-  Serial.println(track);
+  DPRINTF("Next file: ");
+  DPRINTLN(track);
+
+  loops = 0;
+  return true;
 }
 
 
