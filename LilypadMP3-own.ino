@@ -201,9 +201,7 @@ void setup() {
 
 
   // Initialize the SD card:
-
   DPRINTLNF("Initializing SD card... ");
-
   result = sd.begin(SD_SEL, SPI_HALF_SPEED);
 
   if (result != 1) {
@@ -217,7 +215,6 @@ void setup() {
 
   //Initialize the MP3 chip:
   DPRINTLNF("Initializing MP3 chip... ");
-
   result = MP3player.begin();
 
   // Check result, 0 and 6 are OK:
@@ -264,6 +261,8 @@ void setup() {
   MP3player.setMonoMode(1);   // Enable mono mode
 
 }
+
+// TODO: Handle empty playlists/folders
 
 
 // TODO: prevent buttons from overlapping (i.e. when pressed at the same time)
@@ -498,6 +497,12 @@ void loop() {
   static boolean next_button_down = false;
   static unsigned long int next_button_down_start, next_button_downtime;
 
+
+  // Processing of trigger/playlist button flags (were set by IRQ handling methods above):
+  //
+  // Currently we don't need to react on button presses. We only clear the flag set by the IRQ handler.
+  // Instead we react when a button is released and switch to the corresponding playlist.
+
   if (trigger1_pressed) {
     DPRINTLNF("Trigger 1 pressed.");
     trigger1_pressed = false;
@@ -533,6 +538,37 @@ void loop() {
     changePlaylist(2);
     startPlaying();
   }
+
+  // Triggers 4 and 5 are also used by serial debugging.
+  // Thus, interrupts for T4 and T5 are attached only if debugging is disabled (see at the top).
+  // In this case we don't need to watch for flags for T4 and T5, too.
+  #ifndef DEBUG
+
+    if (trigger4_pressed) {
+      DPRINTLNF("Trigger 4 pressed.");
+      trigger4_pressed = false;
+    }
+    if (trigger4_released) {
+      DPRINTLNF("Trigger 4 released.");
+      trigger4_released = false;
+      stopPlaying();
+      changePlaylist(3);
+      startPlaying();
+    }
+
+    if (trigger5_pressed) {
+      DPRINTLNF("Trigger 5 pressed.");
+      trigger5_pressed = false;
+    }
+    if (trigger5_released) {
+      DPRINTLNF("Trigger 5 released.");
+      trigger3_released = false;
+      stopPlaying();
+      changePlaylist(4);
+      startPlaying();
+    }
+
+  #endif
 
 
   // DELETE ME: static boolean reported = false;
@@ -739,26 +775,20 @@ void loop() {
 
 
 
-  // Handle "last track ended" situations
-  // (should we play the next track?)
-
-  // Are we in "playing" mode, and has the
-  // current file ended?
-
-  if (playing && !MP3player.isPlaying())
-  {
+  // Handle "last track ended" situations (should we play the next track?)
+  // Are we in "playing" mode, and has the current file ended?
+  if (playing && !MP3player.isPlaying()) {
     getNextTrack(); // Set up for next track
 
     // If loop_all is true, start the next track
-
     if (loop_all)
-    {
       startPlaying();
-    }
     else
       playing = false;
   }
-}
+
+
+}  // void loop()
 
 
 void changePlaylist(byte pl) {
@@ -821,8 +851,8 @@ void scanCurrentDirectory() {
 }
 
 
-void changeVolume(boolean direction)
-{
+void changeVolume(boolean direction) {
+
   // Increment or decrement the volume.
   // This is handled internally in the VS1053 MP3 chip.
   // Lower numbers are louder (0 is the loudest).
@@ -843,8 +873,7 @@ void changeVolume(boolean direction)
 }
 
 
-void getNextTrack()
-{
+void getNextTrack() {
 
   track_index += 1;
 
@@ -858,8 +887,7 @@ void getNextTrack()
 }
 
 
-void getPrevTrack()
-{
+void getPrevTrack() {
 
   // If current track is already the first one, we set track_index to the last possible index (i.e. list size - 1)
   if (track_index == 0) {
@@ -874,8 +902,7 @@ void getPrevTrack()
 }
 
 
-void getNextFile()
-{
+void getNextFile() {
   // Get the next file (which may be playable or not)
 
   int result = (file.openNext(sd.vwd(), O_READ));
@@ -897,8 +924,8 @@ void getNextFile()
 }
 
 
-void getPrevFile()
-{
+void getPrevFile() {
+
   // Get the previous file (which may be playable or not)
 
   char test[13], prev[13];
@@ -928,8 +955,8 @@ void getPrevFile()
 }
 
 
-void startPlaying()
-{
+void startPlaying() {
+
   int result;
 
   if (debugging)
@@ -949,15 +976,15 @@ void startPlaying()
 }
 
 
-void stopPlaying()
-{
+void stopPlaying() {
+
   if (debugging) Serial.println(F("stopping playback"));
   MP3player.stopTrack();
 }
 
 
-boolean isPlayable()
-{
+boolean isPlayable() {
+
   // Check to see if a filename has a "playable" extension.
   // This is to keep the VS1053 from locking up if it is sent
   // unplayable data.
