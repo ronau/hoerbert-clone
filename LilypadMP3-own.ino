@@ -9,9 +9,6 @@
 
 
 
-// Set debugging to true to get serial messages:
-
-boolean debugging = true;   // TODO: remove this, after DEBUG outputs have been refactored
 
 #define DEBUG    // remove or comment to disable debugging
 
@@ -93,11 +90,9 @@ unsigned int vol_pin_value_old = 0;
 
 volatile boolean prev_button_pressed = false;
 volatile boolean prev_button_released = false;
-volatile unsigned long prev_button_was_down_for = 0L;
 
 volatile boolean next_button_pressed = false;
 volatile boolean next_button_released = false;
-volatile unsigned long next_button_was_down_for = 0L;
 
 volatile boolean trigger1_pressed = false;
 volatile boolean trigger1_released = false;
@@ -110,11 +105,17 @@ volatile boolean trigger4_released = false;
 volatile boolean trigger5_pressed = false;
 volatile boolean trigger5_released = false;
 
-volatile unsigned long trigger1_was_down_for = 0L;
-volatile unsigned long trigger2_was_down_for = 0L;
-volatile unsigned long trigger3_was_down_for = 0L;
-volatile unsigned long trigger4_was_down_for = 0L;
-volatile unsigned long trigger5_was_down_for = 0L;
+// Timer variables (commented out)
+// Uncomment here and in IRQ methods below
+// if you need information about how long a button was presed
+//
+// volatile unsigned long prev_button_was_down_for = 0L;
+// volatile unsigned long next_button_was_down_for = 0L;
+// volatile unsigned long trigger1_was_down_for = 0L;
+// volatile unsigned long trigger2_was_down_for = 0L;
+// volatile unsigned long trigger3_was_down_for = 0L;
+// volatile unsigned long trigger4_was_down_for = 0L;
+// volatile unsigned long trigger5_was_down_for = 0L;
 
 
 
@@ -290,7 +291,7 @@ void prevButtonIRQ() {
     if (prev_end > (prev_start + 10) ) {  // 10ms debounce timer
       prev_button_state = false;
       prev_button_released = true;  // this is the flag the main loop can react on
-      prev_button_was_down_for = prev_end - prev_start;
+      // prev_button_was_down_for = prev_end - prev_start;
     }
 
   }
@@ -321,7 +322,7 @@ void nextButtonIRQ() {
     if (next_end > (next_start + 10) ) {  // 10ms debounce timer
       next_button_state = false;
       next_button_released = true;  // this is the flag the main loop can react on
-      next_button_was_down_for = next_end - next_start;
+      // next_button_was_down_for = next_end - next_start;
     }
 
   }
@@ -351,7 +352,7 @@ void trigger1IRQ() {
     if (t1_end > (t1_start + 10) ) {  // 10 ms debounce timer
       trigger1_state = false;
       trigger1_released = true;   // this is the flag the main loop can react on
-      trigger1_was_down_for = t1_end - t1_start;
+      // trigger1_was_down_for = t1_end - t1_start;
     }
   }
 
@@ -380,7 +381,7 @@ void trigger2IRQ() {
     if (t2_end > (t2_start + 10) ) {  // 10 ms debounce timer
       trigger2_state = false;
       trigger2_released = true;   // this is the flag the main loop can react on
-      trigger2_was_down_for = t2_end - t2_start;
+      // trigger2_was_down_for = t2_end - t2_start;
     }
   }
 
@@ -409,7 +410,7 @@ void trigger3IRQ() {
     if (t3_end > (t3_start + 10) ) {  // 10 ms debounce timer
       trigger3_state = false;
       trigger3_released = true;   // this is the flag the main loop can react on
-      trigger3_was_down_for = t3_end - t3_start;
+      // trigger3_was_down_for = t3_end - t3_start;
     }
   }
 
@@ -438,7 +439,7 @@ void trigger4IRQ() {
     if (t4_end > (t4_start + 10) ) {  // 10 ms debounce timer
       trigger4_state = false;
       trigger4_released = true;   // this is the flag the main loop can react on
-      trigger4_was_down_for = t4_end - t4_start;
+      // trigger4_was_down_for = t4_end - t4_start;
     }
   }
 
@@ -467,7 +468,7 @@ void trigger5IRQ() {
     if (t5_end > (t5_start + 10) ) {  // 10 ms debounce timer
       trigger5_state = false;
       trigger5_released = true;   // this is the flag the main loop can react on
-      trigger5_was_down_for = t5_end - t5_start;
+      // trigger5_was_down_for = t5_end - t5_start;
     }
   }
 
@@ -885,8 +886,7 @@ void getPrevFile() {
 
   strcpy(test,track);
 
-  do
-  {
+  do {
     strcpy(prev,track);
     getNextTrack();
   }
@@ -900,26 +900,20 @@ void startPlaying() {
 
   int result;
 
-  if (debugging)
-  {
-    Serial.print(F("playing "));
-    Serial.print(track);
-    Serial.print(F("..."));
-  }
+  DPRINTF("playing ");
+  DPRINT(track);
+  DPRINTF("...");
 
   result = MP3player.playMP3(track);
 
-  if (debugging)
-  {
-    Serial.print(F(" result "));
-    Serial.println(result);
-  }
+  DPRINTF(" result ");
+  DPRINTLN(result);
 }
 
 
 void stopPlaying() {
 
-  if (debugging) Serial.println(F("stopping playback"));
+  DPRINTLNF("stopping playback");
   MP3player.stopTrack();
 }
 
