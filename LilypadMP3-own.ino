@@ -67,12 +67,16 @@ const byte SCK_PIN = 13;
 
 
 
-// Player modes
-const byte TRACK_MODE = 0;
-const byte SKIP_MODE = 1;
-byte mode = TRACK_MODE;
+// Player properties
 
 const int SKIP_STEP = 3000;     // milliseconds to skip with each skip step
+
+// Start up playing or not playing
+boolean playing = true;
+
+// Set loop_all to true if you would like to automatically
+// start playing the next file after the current one ends:
+boolean loop_all = true;
 
 
 // Volume settings and flags (0 is the loudest, 255 is the lowest)
@@ -83,14 +87,6 @@ const byte MIN_VOLUME = 128;
 unsigned int vol_pin_value = 0;
 unsigned int vol_pin_value_old = 0;
 
-
-// Start up playing or not playing
-boolean playing = true;
-
-
-// Set loop_all to true if you would like to automatically
-// start playing the next file after the current one ends:
-boolean loop_all = true;
 
 
 // Flags for button presses
@@ -122,6 +118,8 @@ volatile unsigned long trigger5_was_down_for = 0L;
 
 
 
+// File and playlist handling
+
 const byte MAX_PLAYLIST = 5;    // Number of playlists
 const byte MAX_TRACKS = 30;     // Maximum number of tracks per playlist
                                 // Attention: increasing this number could cause memory issues
@@ -145,6 +143,8 @@ SdFile file;
 SFEMP3Shield MP3player;
 
 
+
+
 void setup() {
 
   byte result;
@@ -154,7 +154,6 @@ void setup() {
   Serial.begin(9600);
   #endif
 
-  // ('F' places constant strings in program flash to save RAM)
   DPRINTLNF("Lilypad MP3 Player");
   DPRINTF("Free RAM = ");
   DPRINTLNDEC(FreeStack());
@@ -206,7 +205,6 @@ void setup() {
 
   if (result != 1) {
     DPRINTLNF("error, halting");
-    // errorBlink(1,RED);
   }
   else {
     DPRINTLNF("OK");
@@ -221,7 +219,6 @@ void setup() {
   if((result != 0) && (result != 6)) {
     DPRINTF("error ");
     DPRINTLN(result);
-    // errorBlink(result,BLUE);
   }
   else {
     DPRINTLNF("OK");
@@ -244,12 +241,13 @@ void setup() {
   // TODO: read last playlist from flash
   changePlaylist(0);
 
+  // Uncomment to get a directory listing of the SD card:
+  // sd.ls(LS_R | LS_DATE | LS_SIZE);
 
   // Set initial volume (same for both left and right channels)
   MP3player.setVolume(volume, volume);
 
-  // Uncomment to get a directory listing of the SD card:
-  // sd.ls(LS_R | LS_DATE | LS_SIZE);
+  MP3player.setMonoMode(1);   // Enable mono mode
 
   // Turn on amplifier chip:
   digitalWrite(SHDN_GPIO1_PIN, HIGH);
@@ -257,13 +255,9 @@ void setup() {
 
   startPlaying();     // Start playing the current track
 
-  MP3player.setMonoMode(1);   // Enable mono mode
-
 }
 
 
-
-// TODO: prevent buttons from overlapping (i.e. when pressed at the same time)
 
 
 void prevButtonIRQ() {
@@ -489,18 +483,64 @@ void loop() {
   // "Static" variables are initalized the first time the loop runs,
   // but they keep their values through successive loops.
 
-  static boolean prev_button_down = false;
-  static unsigned long int prev_button_down_start, prev_button_downtime;
+  static boolean fast_forwarding = false;
 
-  static boolean next_button_down = false;
-  static unsigned long int next_button_down_start, next_button_downtime;
+
+
+  // Processing of prev/next button flags (were set by IRQ handling methods above):
+  //    boolean next_button_pressed, boolean prev_button_pressed
+  //    boolean next_button_released, boolean prev_button_released
+
+  // NEXT BUTTON - Fast forwarding
+  if (next_button_pressed) {
+    DPRINTLNF("Next button pressed.");
+    next_button_pressed = false;   // clear flag set by interrupt handler
+    fast_forwarding = true;        // switch into fast-forwarding mode
+  }
+  if (next_button_released) {
+    DPRINTLNF("Next button released.");
+    next_button_released = false;  // clear flag set by interrupt handler
+    fast_forwarding = false;       // switch off fast-forwarding mode
+  }
+
+  if (fast_forwarding) {
+    DPRINTLNF("Fast forwarding ...");
+    uint8_t result;
+    result = MP3player.skip(SKIP_STEP);
+    if(result != 0) {
+      DPRINTF("Error code: ");
+      DPRINT(result);
+      DPRINTLNF(" when trying to fast forward track. Jumping to beginning of next track.");
+      playNextTrack();
+    }
+  }
+
+
+  // PREV BUTTON - Jumping to previous track
+  if (prev_button_pressed) {
+    DPRINTLNF("Prev button pressed.");
+    prev_button_pressed = false;
+  }
+  if (prev_button_released) {
+    DPRINTLNF("Prev button released.");
+    prev_button_released = false;
+
+    if (playing && ! fast_forwarding) {   // only if we're not fast-forwarding currently
+      DPRINTLNF("Previous track!");
+      playPreviousTrack();
+    }
+  }
+
 
 
   // Processing of trigger/playlist button flags (were set by IRQ handling methods above):
+  //    boolean triggerX_pressed
+  //    boolean triggerX_released
   //
   // Currently we don't need to react on button presses. We only clear the flag set by the IRQ handler.
   // Instead we react when a button is released and switch to the corresponding playlist.
 
+  // TRIGGER 1
   if (trigger1_pressed) {
     DPRINTLNF("Trigger 1 pressed.");
     trigger1_pressed = false;
@@ -508,11 +548,16 @@ void loop() {
   if (trigger1_released) {
     DPRINTLNF("Trigger 1 released.");
     trigger1_released = false;
-    stopPlaying();
-    changePlaylist(0);
-    startPlaying();
+
+    if (! fast_forwarding) {    // only if we're not fast-forwarding currently
+      if (playlist_index == 0)  // if we are in this playlist already, play next track
+        playNextTrack();
+      else                      // otherwise switch to this playlist
+        playPlaylist(0);
+    }
   }
 
+  // TRIGGER 2
   if (trigger2_pressed) {
     DPRINTLNF("Trigger 2 pressed.");
     trigger2_pressed = false;
@@ -520,11 +565,16 @@ void loop() {
   if (trigger2_released) {
     DPRINTLNF("Trigger 2 released.");
     trigger2_released = false;
-    stopPlaying();
-    changePlaylist(1);
-    startPlaying();
+
+    if (! fast_forwarding) {
+      if (playlist_index == 1)
+        playNextTrack();
+      else
+        playPlaylist(1);
+    }
   }
 
+  // TRIGGER 3
   if (trigger3_pressed) {
     DPRINTLNF("Trigger 3 pressed.");
     trigger3_pressed = false;
@@ -532,9 +582,13 @@ void loop() {
   if (trigger3_released) {
     DPRINTLNF("Trigger 3 released.");
     trigger3_released = false;
-    stopPlaying();
-    changePlaylist(2);
-    startPlaying();
+
+    if (! fast_forwarding) {
+      if (playlist_index == 2)
+        playNextTrack();
+      else
+        playPlaylist(2);
+    }
   }
 
   // Triggers 4 and 5 are also used by serial debugging.
@@ -549,9 +603,13 @@ void loop() {
     if (trigger4_released) {
       DPRINTLNF("Trigger 4 released.");
       trigger4_released = false;
-      stopPlaying();
-      changePlaylist(3);
-      startPlaying();
+
+      if (! fast_forwarding) {
+        if (playlist_index == 3)
+          playNextTrack();
+        else
+          playPlaylist(3);
+      }
     }
 
     if (trigger5_pressed) {
@@ -561,21 +619,21 @@ void loop() {
     if (trigger5_released) {
       DPRINTLNF("Trigger 5 released.");
       trigger3_released = false;
-      stopPlaying();
-      changePlaylist(4);
-      startPlaying();
+
+      if (! fast_forwarding) {
+        if (playlist_index == 4)
+          playNextTrack();
+        else
+          playPlaylist(4);
+      }
     }
 
   #endif
 
 
-  // DELETE ME: static boolean reported = false;
 
 
-
-  // Volume Management
-
-  // TODO: prevent complete muting, so that it does not continue playing without being noticed
+  // VOLUME MANAGEMENT
 
 
   // Volume on LilypadMP3 is a value between 0 and 255 with 0 being the loudest
@@ -615,163 +673,6 @@ void loop() {
 
 
 
-  // The prev button IRQ sets several flags to true, one for
-  // button_pressed, one for button_released. We'll clear these
-  // when we're done handling them:
-
-
-  // prev button has been pressed down "recently"
-  if (prev_button_pressed) {
-
-    if (debugging) Serial.println(F("prev button pressed"));
-
-    prev_button_pressed = false;  // Clear flag set by interrupt handler
-
-    // We'll set another flag saying the button is now down.
-    // This way we can keep track of how long the button is being held down.
-    //
-    // We can't do this in interrupts, because the button state doesn't change
-    // while it's being held down.
-
-    prev_button_down = true;
-    prev_button_down_start = millis();
-  }
-
-
-  // prev button has been released "recently"
-  if (prev_button_released) {
-
-    if (debugging)
-    {
-      Serial.print(F("prev button released, was down for: "));
-      Serial.println(prev_button_was_down_for,DEC);
-    }
-
-    // For short button presses, we jump to the previous track
-    if (prev_button_was_down_for < 1000) {
-
-      if (playing) {
-        // TODO: stay in same playlist when jumping back
-        mode = TRACK_MODE;
-        Serial.println(F("Previous track!"));
-        stopPlaying();
-        getPrevTrack();
-        startPlaying();
-      }
-    }
-
-    prev_button_released = false;  // Clear flag set by interrupt handler
-    prev_button_down = false;  // now button is not down anymore
-  }
-
-
-
-  // as long as the prev button is down, we'll enter this segment
-  if (prev_button_down) {
-
-    prev_button_downtime = millis() - prev_button_down_start;
-
-    // button is now down already for more than 1 second -> rewind
-    if (prev_button_downtime > 1000) {
-
-      mode = SKIP_MODE;
-
-      DPRINTLNF("Rewinding ...");
-      uint8_t result;
-      result = MP3player.skip(SKIP_STEP * -1);
-      if(result != 0) {
-        DPRINTF("Error code: ");
-        DPRINT(result);
-        DPRINTF(" when trying to rewind track. Jumping to beginning of track: ");
-        result = MP3player.skipTo(0);
-        DPRINTLN(result);
-        prev_button_down = false;
-      }
-
-
-      if (debugging) {
-      }
-    }
-  }
-
-
-
-
-  // next button has been pressed down "recently"
-  if (next_button_pressed) {
-
-    if (debugging) Serial.println(F("next button pressed"));
-
-    next_button_pressed = false;  // Clear flag set by interrupt handler
-
-    // We'll set another flag saying the button is now down.
-    // This way we can keep track of how long the button is being held down.
-    //
-    // We can't do this in interrupts, because the button state doesn't change
-    // while it's being held down.
-
-    next_button_down = true;
-    next_button_down_start = millis();
-  }
-
-
-  // next button has been released "recently"
-  if (next_button_released) {
-
-    if (debugging) {
-      Serial.print(F("next button released, was down for: "));
-      Serial.println(next_button_was_down_for, DEC);
-    }
-
-    // For short buttton presses, we jump to the next track
-    if (next_button_was_down_for < 1000) {
-
-      if (playing) {
-        // TODO: stay in same playlist when jumping forward
-        mode = TRACK_MODE;
-        Serial.println(F("Next track!"));
-        stopPlaying();
-        getNextTrack();
-        startPlaying();
-      }
-    }
-
-    next_button_released = false;   // Clear flag set by interrupt handler
-    next_button_down = false;   // now the button is not down anymore
-  }
-
-
-
-
-  // as long as the next button is down, we'll enter this segment
-  if (next_button_down) {
-
-    next_button_downtime = millis() - next_button_down_start;
-
-    // button is now down already for more than 1 second -> fast forward
-    if (next_button_downtime > 1000) {
-
-      mode = SKIP_MODE;
-
-      if (debugging) {
-        Serial.println(F("Fast forwarding ..."));
-        uint8_t result;
-        result = MP3player.skip(SKIP_STEP);
-        if(result != 0) {
-          Serial.print(F("Error code: "));
-          Serial.print(result);
-          Serial.println(F(" when trying to fast forward track. Jumping to beginning of next track."));
-          stopPlaying();
-          getNextTrack();
-          startPlaying();
-        }
-      }
-    }
-  }
-
-
-
-
 
   // Handle "last track ended" situations (should we play the next track?)
   // Are we in "playing" mode, and has the current file ended?
@@ -786,7 +687,10 @@ void loop() {
   }
 
 
+
 }  // void loop()
+
+
 
 
 void changePlaylist(byte pl) {
@@ -860,25 +764,24 @@ void scanCurrentDirectory() {
 }
 
 
-void changeVolume(boolean direction) {
+void playNextTrack() {
+  stopPlaying();
+  getNextTrack();
+  startPlaying();
+}
 
-  // Increment or decrement the volume.
-  // This is handled internally in the VS1053 MP3 chip.
-  // Lower numbers are louder (0 is the loudest).
 
-  if (volume < 255 && direction == false)
-    volume += 2;
+void playPreviousTrack() {
+  stopPlaying();
+  getPrevTrack();
+  startPlaying();
+}
 
-  if (volume > 0 && direction == true)
-    volume -= 2;
 
-  MP3player.setVolume(volume, volume);
-
-  if (debugging)
-  {
-    Serial.print(F("volume "));
-    Serial.println(volume);
-  }
+void playPlaylist(byte pl) {
+  stopPlaying();
+  changePlaylist(pl);
+  startPlaying();
 }
 
 
@@ -906,15 +809,22 @@ void getNextTrack() {
 
 void getPrevTrack() {
 
-  // If current track is already the first one, we set track_index to the last possible index (i.e. list size - 1)
-  if (track_index == 0) {
-    track_index = num_tracks - 1;
-  }
-  else {
-    track_index -= 1;
+  if (num_tracks == 0) {    // if there are no tracks to play, set playing flag to false
+    playing = false;
   }
 
-  strcpy(track, filename[track_index]);   // Get name of current track from filename array
+  else {                    // otherwise set previous track as current track
+
+    // If current track is already the first one, we set track_index to the last possible index (i.e. list size - 1)
+    if (track_index == 0) {
+      track_index = num_tracks - 1;
+    }
+    else {
+      track_index -= 1;
+    }
+
+    strcpy(track, filename[track_index]);   // Get name of current track from filename array
+  }
 
 }
 
