@@ -6,7 +6,10 @@
 #include <FreeStack.h>
 #include <SFEMP3Shield.h>
 #include <PinChangeInt.h>
+#include <EEPROM.h>
 
+// forward declaration of changePlaylist method
+void changePlaylist(byte pl, boolean reset_track_resume_value = true);
 
 
 
@@ -83,6 +86,10 @@ const byte MIN_VOLUME = 128;
 // (analog read) values at volume pin
 unsigned int vol_pin_value = 0;
 unsigned int vol_pin_value_old = 0;
+
+// EEPROM addresses for resume function on startup
+const int PL_ADDRESS = 0;
+const int TR_ADDRESS = 1;
 
 
 
@@ -239,8 +246,41 @@ void setup() {
   PCintPort::attachInterrupt(TRIG5_PIN, &trigger5IRQ, CHANGE);
   #endif
 
-  // TODO: read last playlist from flash
-  changePlaylist(0);
+
+  // RESUME PLAYING (i.e. start with last played track, but from beginning)
+  byte resume_pl = EEPROM.read(PL_ADDRESS);
+  byte resume_tr = EEPROM.read(TR_ADDRESS);
+
+  DPRINTF("Resume values: playlist ");
+  DPRINT(resume_pl);
+  DPRINTF(", track ");
+  DPRINTLN(resume_tr);
+
+  // make sure that playlist resume value from EEPROM is within allowed range
+  if (resume_pl > -1 && resume_pl < MAX_PLAYLIST) {
+
+    changePlaylist(resume_pl, false);
+
+    // change track only if track resume value is within size of current playlist
+    if (resume_tr > -1 && resume_tr < num_tracks) {
+      track_index = resume_tr;                // take over resume value as current track index
+      strcpy(track, filename[track_index]);   // Get name of current track from filename array
+    }
+    else {
+      DPRINTF("Track resume value ");
+      DPRINT(resume_tr);
+      DPRINTLNF(" out of range. Track has not been switched.");
+    }
+
+  }
+  else {                                              // fallback: play first playlist
+    DPRINTF("Playlist resume value ");
+    DPRINT(resume_pl);
+    DPRINTLNF(" out of range. Switching to first playlist.");
+
+    changePlaylist(0, false);
+  }
+
 
   // Uncomment to get a directory listing of the SD card:
   // sd.ls(LS_R | LS_DATE | LS_SIZE);
@@ -694,18 +734,23 @@ void loop() {
 
 
 
-void changePlaylist(byte pl) {
+void changePlaylist(byte pl, boolean reset_track_resume_value) {
 
   if (pl > -1 && pl < MAX_PLAYLIST) {   // check that provided playlist number is within allowed range
 
     if ( sd.chdir(playlist_folder[pl], true) ) {  // if change into folder was successful
 
       playlist_index = pl;
+      EEPROM.update(PL_ADDRESS, pl);  // update playlist number in EEPROM for resume on startup
       // sd.ls(LS_R | LS_DATE | LS_SIZE);
       DPRINTF("Switched to directory ");
       DPRINTLN(playlist_folder[pl]);
       scanCurrentDirectory();
       playing = true;   // if player was stopped, now we want it to play again
+
+      if (reset_track_resume_value) {
+        EEPROM.update(TR_ADDRESS, track_index); // update track number in EEPROM for resume on startup
+      }
 
     }
     else {  // folder change was not successful
@@ -802,6 +847,7 @@ void getNextTrack() {
     }
 
     strcpy(track, filename[track_index]);   // Get name of current track from filename array
+    EEPROM.update(TR_ADDRESS, track_index); // update track number in EEPROM for resume on startup
   }
 
 
@@ -825,6 +871,7 @@ void getPrevTrack() {
     }
 
     strcpy(track, filename[track_index]);   // Get name of current track from filename array
+    EEPROM.update(TR_ADDRESS, track_index); // update track number in EEPROM for resume on startup
   }
 
 }
