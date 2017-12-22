@@ -80,7 +80,7 @@ boolean loop_all = true;
 
 
 // Volume settings and flags (0 is the loudest, 255 is the lowest)
-byte volume = 40;              // Initial volume
+byte volume = 40;              // Default volume
 const byte MIN_VOLUME = 128;
 
 // (analog read) values at volume pin
@@ -285,8 +285,8 @@ void setup() {
   // Uncomment to get a directory listing of the SD card:
   // sd.ls(LS_R | LS_DATE | LS_SIZE);
 
-  // Set initial volume (same for both left and right channels)
-  MP3player.setVolume(volume, volume);
+  // Set initial volume
+  updateVolume();
 
   MP3player.setMonoMode(1);   // Enable mono mode
 
@@ -527,6 +527,10 @@ void loop() {
   static boolean fast_forwarding = false;
 
 
+  // volume management
+  updateVolume();
+
+
 
   // Processing of prev/next button flags (were set by IRQ handling methods above):
   //    boolean next_button_pressed, boolean prev_button_pressed
@@ -674,8 +678,26 @@ void loop() {
 
 
 
-  // VOLUME MANAGEMENT
+  // Handle "last track ended" situations (should we play the next track?)
+  // Are we in "playing" mode, and has the current file ended?
+  if (playing && !MP3player.isPlaying()) {
+    getNextTrack(); // Set up for next track
 
+    // If loop_all is true, start the next track
+    if (loop_all)
+      startPlaying();
+    else
+      playing = false;
+  }
+
+
+
+}  // void loop()
+
+
+
+
+void updateVolume() {
 
   // Volume on LilypadMP3 is a value between 0 and 255 with 0 being the loudest
 
@@ -712,24 +734,7 @@ void loop() {
     }
   }
 
-
-
-
-  // Handle "last track ended" situations (should we play the next track?)
-  // Are we in "playing" mode, and has the current file ended?
-  if (playing && !MP3player.isPlaying()) {
-    getNextTrack(); // Set up for next track
-
-    // If loop_all is true, start the next track
-    if (loop_all)
-      startPlaying();
-    else
-      playing = false;
-  }
-
-
-
-}  // void loop()
+}
 
 
 
