@@ -85,7 +85,7 @@ boolean loop_all = true;
 
 // Volume settings and flags (0 is the loudest, 255 is the lowest)
 byte volume = 40;              // Default volume
-const byte MIN_VOLUME = 128;
+const byte MIN_VOLUME = 104;
 
 // (analog read) values at volume pin
 unsigned int vol_pin_value = 0;
@@ -156,8 +156,6 @@ SFEMP3Shield MP3player;
 SFE_TPA2016D2 amp;
 
 
-// TODO: avoid cracking when switched on (is it even possible?)
-// TODO: lower volume during fast forward
 
 
 void setup() {
@@ -572,7 +570,9 @@ void loop() {
 
 
   // volume management
-  updateVolume();
+  if (! fast_forwarding) {    // during fast-forward, volume is fixed at a low level
+    updateVolume();
+  }
 
 
 
@@ -585,11 +585,19 @@ void loop() {
     DPRINTLNF("Next button pressed.");
     next_button_pressed = false;   // clear flag set by interrupt handler
     fast_forwarding = true;        // switch into fast-forwarding mode
+    if (volume < 100) {
+      MP3player.setVolume(100, 100);   // set volume to a low level (because of annoying skipping sounds)
+
+      // set global volume values off, so that volume will be updated when fast-forwarding ends
+      vol_pin_value_old = -42;
+      volume = 255;
+    }
   }
   if (next_button_released) {
     DPRINTLNF("Next button released.");
     next_button_released = false;  // clear flag set by interrupt handler
     fast_forwarding = false;       // switch off fast-forwarding mode
+    updateVolume();                // reset correct volume level again
   }
 
   if (fast_forwarding) {
