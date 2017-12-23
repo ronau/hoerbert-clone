@@ -14,8 +14,11 @@
 void changePlaylist(byte pl, boolean reset_track_resume_value = true);
 
 
-
-#define DEBUG    // remove or comment to disable debugging
+// DEBUGGING
+// Remove or comment out the following line to disable debugging.
+// Please note: While debugging is enabled, triggers 4 and 5 will not work,
+//              as their pins are used by serial debugging interface (RX, TX).
+#define DEBUG
 
 #ifdef DEBUG
 #define DPRINT(x) Serial.print(x)
@@ -686,7 +689,7 @@ void loop() {
     }
   }
 
-  // Triggers 4 and 5 are also used by serial debugging.
+  // Pins of triggers 4 and 5 are also used by serial debugging.
   // Thus, interrupts for T4 and T5 are attached only if debugging is disabled (see at the top).
   // In this case we don't need to watch for flags for T4 and T5, too.
   #ifndef DEBUG
