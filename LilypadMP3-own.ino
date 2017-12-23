@@ -583,8 +583,8 @@ void loop() {
     DPRINTLNF("Next button pressed.");
     next_button_pressed = false;   // clear flag set by interrupt handler
     fast_forwarding = true;        // switch into fast-forwarding mode
-    if (volume < 100) {
-      MP3player.setVolume(100, 100);   // set volume to a low level (because of annoying skipping sounds)
+    if (volume < 75) {
+      MP3player.setVolume(75, 75);   // set volume to a low level (because of annoying skipping sounds)
 
       // set global volume values off, so that volume will be updated when fast-forwarding ends
       vol_pin_value_old = -42;
