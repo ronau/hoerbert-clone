@@ -49,11 +49,9 @@ const byte TRIG5_PIN = 0;
 byte trigger[5] = {TRIG1_PIN,TRIG2_PIN,TRIG3_PIN,TRIG4_PIN,TRIG5_PIN};
 
 
-// #define PREV_PIN 5    // black cable, former blue LED
 const byte PREV_PIN = A3;
-// #define NEXT_PIN 10   // red cable, former red LED
 const byte NEXT_PIN = 3;
-const byte VOL_PIN = A1;    // white cable, former green LED
+const byte VOL_PIN = A1;
 
 
 // MP3 library pins (just reused from original examples)
@@ -715,7 +713,7 @@ void loop() {
     }
     if (trigger5_released) {
       DPRINTLNF("Trigger 5 released.");
-      trigger3_released = false;
+      trigger5_released = false;
 
       if (! fast_forwarding) {
         if (playlist_index == 4)
