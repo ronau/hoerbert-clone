@@ -7,6 +7,8 @@
 #include <SFEMP3Shield.h>
 #include <PinChangeInt.h>
 #include <EEPROM.h>
+#include <Wire.h>
+#include <SFE_TPA2016D2.h>
 
 // forward declaration of changePlaylist method
 void changePlaylist(byte pl, boolean reset_track_resume_value = true);
@@ -21,12 +23,14 @@ void changePlaylist(byte pl, boolean reset_track_resume_value = true);
 #define DPRINTLN(x) Serial.println(x)
 #define DPRINTLNF(x) Serial.println(F(x))
 #define DPRINTLNDEC(x) Serial.println(x, DEC)
+#define DPRINTLNBIN(x) Serial.println(x, BIN)
 #else
 #define DPRINT(x)
 #define DPRINTF(x)
 #define DPRINTLN(x)
 #define DPRINTLNF(x)
-#define DPRINTLNDEC(x) Serial.println(x, DEC)
+#define DPRINTLNDEC(x)
+#define DPRINTLNBIN(x)
 #endif
 
 
@@ -149,8 +153,11 @@ byte num_tracks = 0;            // Number of playable tracks in current director
 SdFat sd;
 SdFile file;
 SFEMP3Shield MP3player;
+SFE_TPA2016D2 amp;
 
 
+// TODO: avoid cracking when switched on (is it even possible?)
+// TODO: lower volume during fast forward
 
 
 void setup() {
@@ -232,6 +239,50 @@ void setup() {
     DPRINTLNF("OK");
   }
 
+  MP3player.setMonoMode(1);   // Enable mono mode
+
+
+  // Turn on amplifier chip and reconfigure using I2C
+  digitalWrite(SHDN_GPIO1_PIN, HIGH);
+  delay(2);
+
+  // The amp chip has a feature called 'automatic gain control'.
+  // From the datasheet:
+  //
+  // The Automatic Gain Control (AGC) feature provides continuous automatic
+  // gain adjustment to the amplifier through an internal PGA. This feature
+  // enhances the perceived audio loudness and at the same time prevents
+  // speaker damage from occurring (Limiter function).
+  //
+  //
+  // As a side effect the amp will slowly increase volume on startup of the MP3 player
+  // and if volume has been increased rapidly.
+  // This might confuse the user of the player (especially children).
+  // That's why we will switch off this behaviour.
+  //
+  // We will do so by rewriting the amp chip's configuration register 7 via I2C (Wire).
+  // By default, register 7 has the following value: 0b11000001
+  // By changing the last two bits to 00 we switch off the compression of the amp,
+  // thus disabling the whole 'automatic gain control' feature.
+  // For ease of use, we use the SFE_TPA2016D2 library provided by SparkFun.
+
+  byte compressionratio;
+
+  if ( amp.writeCompressionRatio(0) ) {
+    DPRINTLNF("Wire/I2C: Automatic Gain Control disabled.");
+  }
+  else {
+    DPRINTLNF("Wire/I2C: Disabling Automatic Gain Control failed.");
+  }
+
+  if ( amp.readCompressionRatio(compressionratio) ) {
+    DPRINTF("Wire/I2C: Compression ratio: ");
+    DPRINTLNBIN(compressionratio);
+  }
+  else {
+    DPRINTLNF("Wire/I2C: Reading compression ratio failed.");
+  }
+
 
   // Set up interrupts.
   // We'll use the pin change interrupt library
@@ -285,14 +336,7 @@ void setup() {
   // Uncomment to get a directory listing of the SD card:
   // sd.ls(LS_R | LS_DATE | LS_SIZE);
 
-  // Set initial volume
-  updateVolume();
-
-  MP3player.setMonoMode(1);   // Enable mono mode
-
-  // Turn on amplifier chip:
-  digitalWrite(SHDN_GPIO1_PIN, HIGH);
-  delay(2);
+  updateVolume();   // Set initial volume
 
   startPlaying();     // Start playing the current track
 
