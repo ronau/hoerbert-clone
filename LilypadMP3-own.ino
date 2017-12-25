@@ -86,7 +86,7 @@ boolean loop_all = true;
 
 // Volume settings and flags (0 is the loudest, 255 is the lowest)
 byte volume = 40;              // Default volume
-const byte MIN_VOLUME = 104;
+const byte MIN_VOLUME = 90;
 
 // (analog read) values at volume pin
 unsigned int vol_pin_value = 0;
@@ -611,8 +611,8 @@ void loop() {
     DPRINTLNF("Next button pressed.");
     next_button_pressed = false;   // clear flag set by interrupt handler
     fast_forwarding = true;        // switch into fast-forwarding mode
-    if (volume < 75) {
-      MP3player.setVolume(75, 75);   // set volume to a low level (because of annoying skipping sounds)
+    if (volume < 60) {
+      MP3player.setVolume(60, 60);   // set volume to a low level (because of annoying skipping sounds)
 
       // set global volume values off, so that volume will be updated when fast-forwarding ends
       vol_pin_value_old = -42;
