@@ -245,6 +245,30 @@ void setup() {
   digitalWrite(SHDN_GPIO1_PIN, HIGH);
   delay(2);
 
+
+  // Changing fixed gain of the amplifier.
+  // By default, it is set to +6 dB.
+  // We set it to +2 dB, which is sufficient.
+
+  if ( amp.writeFixedGain(2) ) {
+    DPRINTLNF("Wire/I2C: Reset amp gain to 2 dB.");
+  }
+  else {
+    DPRINTLNF("Wire/I2C: Resetting amp gain failed.");
+  }
+
+  #ifdef DEBUG
+    byte fixedgain;
+    if ( amp.readFixedGain(&fixedgain) ) {
+      DPRINTF("Wire/I2C: Fixed gain: ");
+      DPRINTLNBIN(fixedgain);
+    }
+    else {
+      DPRINTLNF("Wire/I2C: Reading fixed gain failed.");
+    }
+  #endif
+
+
   // The amp chip has a feature called 'automatic gain control'.
   // From the datasheet:
   //
@@ -265,8 +289,6 @@ void setup() {
   // thus disabling the whole 'automatic gain control' feature.
   // For ease of use, we use the SFE_TPA2016D2 library provided by SparkFun.
 
-  byte compressionratio;
-
   if ( amp.writeCompressionRatio(0) ) {
     DPRINTLNF("Wire/I2C: Automatic Gain Control disabled.");
   }
@@ -274,13 +296,16 @@ void setup() {
     DPRINTLNF("Wire/I2C: Disabling Automatic Gain Control failed.");
   }
 
-  if ( amp.readCompressionRatio(compressionratio) ) {
-    DPRINTF("Wire/I2C: Compression ratio: ");
-    DPRINTLNBIN(compressionratio);
-  }
-  else {
-    DPRINTLNF("Wire/I2C: Reading compression ratio failed.");
-  }
+  #ifdef DEBUG
+    byte compressionratio;
+    if ( amp.readCompressionRatio(&compressionratio) ) {
+      DPRINTF("Wire/I2C: Compression ratio: ");
+      DPRINTLNBIN(compressionratio);
+    }
+    else {
+      DPRINTLNF("Wire/I2C: Reading compression ratio failed.");
+    }
+  #endif
 
 
   // Set up interrupts.
